@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>あけおめ00:00 クイック練習</title>
+<title>00:00 クイック練習（Discordラグ）</title>
 <style>
 body {
     background: #020617;
@@ -14,7 +14,7 @@ body {
     height: 100vh;
 }
 .game {
-    width: 360px;
+    width: 380px;
     background: #020617;
     padding: 24px;
     border-radius: 14px;
@@ -26,10 +26,11 @@ body {
     margin: 12px 0;
     font-variant-numeric: tabular-nums;
 }
-input {
+input, select {
     width: 100%;
     padding: 10px;
     font-size: 1em;
+    margin-top: 6px;
 }
 button {
     width: 100%;
@@ -42,9 +43,7 @@ button {
     margin-top: 14px;
     line-height: 1.6;
 }
-.hidden {
-    display: none;
-}
+.hidden { display: none; }
 </style>
 </head>
 <body>
@@ -52,28 +51,37 @@ button {
 <div class="game">
     <h2>00:00 クイック練習</h2>
 
+    <label>
+        Discord送信ラグ
+        <select id="lagPreset">
+            <option value="good">🟢 良好</option>
+            <option value="normal" selected>🟡 普通</option>
+            <option value="bad">🔴 混雑</option>
+            <option value="chaos">🎲 カオス</option>
+        </select>
+    </label>
+
     <button id="startBtn">スタート</button>
 
     <div class="clock" id="clock">--:--:--.---</div>
 
     <input id="input" placeholder="あけおめ" disabled>
+    <button id="sendBtn" disabled>送信</button>
 
     <div class="result" id="result"></div>
-
     <button id="retryBtn" class="hidden">もう一回 (R)</button>
 </div>
 
 <script>
-let startTime;
-let timer;
+let startTime, timer;
 let sent = false;
 let firstInputTime = null;
 let startOffset = 0;
 
 const clockEl = document.getElementById("clock");
 const inputEl = document.getElementById("input");
+const sendBtn = document.getElementById("sendBtn");
 const resultEl = document.getElementById("result");
-const startBtn = document.getElementById("startBtn");
 const retryBtn = document.getElementById("retryBtn");
 
 function format(ms) {
@@ -83,7 +91,20 @@ function format(ms) {
 }
 
 function randomOffset() {
-    return -(3000 + Math.random() * 5000); // -3000 ～ -8000
+    return -(3000 + Math.random() * 5000);
+}
+
+function calcDiscordLag() {
+    const preset = document.getElementById("lagPreset").value;
+    let base = 0;
+    switch (preset) {
+        case "good": base = 80; break;
+        case "normal": base = 150; break;
+        case "bad": base = 250; break;
+        case "chaos": base = 120 + Math.random() * 200; break;
+    }
+    const jitter = -30 + Math.random() * 80;
+    return Math.max(0, base + jitter);
 }
 
 function startGame() {
@@ -94,6 +115,7 @@ function startGame() {
 
     inputEl.value = "";
     inputEl.disabled = false;
+    sendBtn.disabled = false;
     inputEl.focus();
 
     startOffset = randomOffset();
@@ -106,45 +128,25 @@ function startGame() {
     }, 10);
 }
 
-function rankReaction(ms) {
-    if (ms <= 70) return "🟣 プロ";
-    if (ms <= 150) return "🔵 速い";
-    if (ms <= 300) return "🟢 人間";
-    if (ms <= 700) return "🟡 慎重";
-    return "🔴 迷ってる";
-}
-
-function rankAccuracy(ms) {
-    const a = Math.abs(ms);
-    if (a <= 10) return "👑 神";
-    if (a <= 50) return "⚡ かなり強い";
-    if (a <= 150) return "🙂 良";
-    if (a <= 300) return "😐 可";
-    return "😇 修行";
-}
-
 function send() {
-    if (sent || inputEl.value.length < 1) return;
+    if (sent || inputEl.value.length === 0) return;
     sent = true;
 
     clearInterval(timer);
     inputEl.disabled = true;
+    sendBtn.disabled = true;
 
     const now = performance.now();
-    const sendTime = now - startTime + startOffset;
-    const reaction = sendTime - firstInputTime;
-
-    const accRank = rankAccuracy(sendTime);
-    const reactRank = rankReaction(reaction);
+    const pressTime = now - startTime + startOffset;
+    const lag = calcDiscordLag();
+    const discordTime = pressTime + lag;
 
     resultEl.innerHTML = `
         <strong>結果</strong><br>
-        送信誤差: ${sendTime.toFixed(1)} ms<br>
-        精度評価: ${accRank}<br><br>
-        入力速度: ${reaction.toFixed(1)} ms<br>
-        入力評価: ${reactRank}
+        押した瞬間: ${pressTime.toFixed(1)} ms<br>
+        Discord到達: ${discordTime.toFixed(1)} ms<br><br>
+        送信ラグ: ${lag.toFixed(0)} ms
     `;
-
     retryBtn.classList.remove("hidden");
 }
 
@@ -154,8 +156,9 @@ inputEl.addEventListener("keydown", e => {
     }
     if (e.key === "Enter") send();
 });
+sendBtn.onclick = send;
 
-startBtn.onclick = startGame;
+document.getElementById("startBtn").onclick = startGame;
 retryBtn.onclick = startGame;
 
 document.addEventListener("keydown", e => {
