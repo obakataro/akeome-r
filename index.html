@@ -2,136 +2,166 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>あけおめ00:00練習（ラグ対応）</title>
+<title>あけおめ00:00 クイック練習</title>
 <style>
 body {
-    font-family: system-ui, sans-serif;
     background: #020617;
     color: #e5e7eb;
+    font-family: system-ui, sans-serif;
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
 }
 .game {
+    width: 360px;
     background: #020617;
     padding: 24px;
-    border-radius: 12px;
-    width: 340px;
-    text-align: center;
+    border-radius: 14px;
     box-shadow: 0 0 30px rgba(0,0,0,.6);
+    text-align: center;
 }
 .clock {
-    font-size: 2em;
+    font-size: 2.2em;
     margin: 12px 0;
     font-variant-numeric: tabular-nums;
 }
-input, button {
+input {
     width: 100%;
-    padding: 8px;
-    margin: 4px 0;
+    padding: 10px;
+    font-size: 1em;
 }
-label {
-    font-size: 0.9em;
+button {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    font-size: 1em;
+    cursor: pointer;
 }
 .result {
-    margin-top: 12px;
+    margin-top: 14px;
+    line-height: 1.6;
+}
+.hidden {
+    display: none;
 }
 </style>
 </head>
 <body>
 
 <div class="game">
-    <h2>あけおめ00:00練習</h2>
-
-    <label>
-        回線速度（Mbps）
-        <input id="speed" type="number" value="31">
-    </label>
-
-    <label>
-        <input type="checkbox" id="lagToggle" checked>
-        カスタムラグを有効
-    </label>
+    <h2>00:00 クイック練習</h2>
 
     <button id="startBtn">スタート</button>
 
-    <div class="clock" id="clock">23:59:10.000</div>
+    <div class="clock" id="clock">--:--:--.---</div>
 
-    <input id="message" placeholder="あけおめ" disabled>
-    <button id="sendBtn" disabled>送る</button>
+    <input id="input" placeholder="あけおめ" disabled>
 
     <div class="result" id="result"></div>
+
+    <button id="retryBtn" class="hidden">もう一回 (R)</button>
 </div>
 
 <script>
-let startTime, timer, sent = false;
-
-const START_OFFSET = -50000; // 23:59:10
-const ZERO_TIME = 0;
+let startTime;
+let timer;
+let sent = false;
+let firstInputTime = null;
+let startOffset = 0;
 
 const clockEl = document.getElementById("clock");
-const startBtn = document.getElementById("startBtn");
-const sendBtn = document.getElementById("sendBtn");
-const messageInput = document.getElementById("message");
+const inputEl = document.getElementById("input");
 const resultEl = document.getElementById("result");
+const startBtn = document.getElementById("startBtn");
+const retryBtn = document.getElementById("retryBtn");
 
-function formatTime(ms) {
+function format(ms) {
     const d = new Date(0);
     d.setMilliseconds(ms + 86400000);
     return d.toISOString().substr(11, 12);
 }
 
-function calcLag() {
-    if (!document.getElementById("lagToggle").checked) return 0;
-    const speed = Math.max(1, Number(document.getElementById("speed").value));
-    return 200 + (1000 / speed) * 10;
+function randomOffset() {
+    return -(3000 + Math.random() * 5000); // -3000 ～ -8000
 }
 
 function startGame() {
     sent = false;
+    firstInputTime = null;
     resultEl.textContent = "";
-    messageInput.disabled = false;
-    sendBtn.disabled = false;
+    retryBtn.classList.add("hidden");
 
+    inputEl.value = "";
+    inputEl.disabled = false;
+    inputEl.focus();
+
+    startOffset = randomOffset();
     startTime = performance.now();
-    clearInterval(timer);
 
+    clearInterval(timer);
     timer = setInterval(() => {
-        const elapsed = performance.now() - startTime + START_OFFSET;
-        clockEl.textContent = formatTime(elapsed);
+        const elapsed = performance.now() - startTime + startOffset;
+        clockEl.textContent = format(elapsed);
     }, 10);
 }
 
-function sendMessage() {
-    if (sent) return;
-    sent = true;
-
-    const pressTime = performance.now() - startTime + START_OFFSET;
-    const lag = calcLag();
-
-    messageInput.disabled = true;
-    sendBtn.disabled = true;
-
-    setTimeout(() => {
-        clearInterval(timer);
-        const finalTime = pressTime + lag;
-
-        if (finalTime < ZERO_TIME) {
-            resultEl.innerHTML =
-                `❌ おてつき<br>送信遅延: ${Math.floor(lag)}ms`;
-        } else {
-            resultEl.innerHTML =
-                `🎉 +${Math.floor(finalTime)} ms<br>` +
-                `送信遅延: ${Math.floor(lag)}ms`;
-        }
-    }, lag);
+function rankReaction(ms) {
+    if (ms <= 70) return "🟣 プロ";
+    if (ms <= 150) return "🔵 速い";
+    if (ms <= 300) return "🟢 人間";
+    if (ms <= 700) return "🟡 慎重";
+    return "🔴 迷ってる";
 }
 
+function rankAccuracy(ms) {
+    const a = Math.abs(ms);
+    if (a <= 10) return "👑 神";
+    if (a <= 50) return "⚡ かなり強い";
+    if (a <= 150) return "🙂 良";
+    if (a <= 300) return "😐 可";
+    return "😇 修行";
+}
+
+function send() {
+    if (sent || inputEl.value.length < 1) return;
+    sent = true;
+
+    clearInterval(timer);
+    inputEl.disabled = true;
+
+    const now = performance.now();
+    const sendTime = now - startTime + startOffset;
+    const reaction = sendTime - firstInputTime;
+
+    const accRank = rankAccuracy(sendTime);
+    const reactRank = rankReaction(reaction);
+
+    resultEl.innerHTML = `
+        <strong>結果</strong><br>
+        送信誤差: ${sendTime.toFixed(1)} ms<br>
+        精度評価: ${accRank}<br><br>
+        入力速度: ${reaction.toFixed(1)} ms<br>
+        入力評価: ${reactRank}
+    `;
+
+    retryBtn.classList.remove("hidden");
+}
+
+inputEl.addEventListener("keydown", e => {
+    if (!firstInputTime) {
+        firstInputTime = performance.now() - startTime + startOffset;
+    }
+    if (e.key === "Enter") send();
+});
+
 startBtn.onclick = startGame;
-sendBtn.onclick = sendMessage;
-messageInput.addEventListener("keydown", e => {
-    if (e.key === "Enter") sendMessage();
+retryBtn.onclick = startGame;
+
+document.addEventListener("keydown", e => {
+    if (e.key.toLowerCase() === "r" && !retryBtn.classList.contains("hidden")) {
+        startGame();
+    }
 });
 </script>
 
