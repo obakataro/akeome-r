@@ -2,55 +2,61 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>あけおめ00:00練習ゲーム</title>
+<title>あけおめ00:00練習（ラグ対応）</title>
 <style>
-    body {
-        font-family: system-ui, sans-serif;
-        background: #0f172a;
-        color: #e5e7eb;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-    }
-    .game {
-        background: #020617;
-        padding: 24px;
-        border-radius: 12px;
-        width: 320px;
-        text-align: center;
-        box-shadow: 0 0 30px rgba(0,0,0,.5);
-    }
-    .clock {
-        font-size: 2em;
-        margin: 16px 0;
-        font-variant-numeric: tabular-nums;
-    }
-    input {
-        width: 100%;
-        padding: 8px;
-        font-size: 1em;
-        margin-bottom: 8px;
-    }
-    button {
-        width: 100%;
-        padding: 10px;
-        font-size: 1em;
-        cursor: pointer;
-    }
-    .result {
-        margin-top: 12px;
-        font-size: 1.1em;
-    }
+body {
+    font-family: system-ui, sans-serif;
+    background: #020617;
+    color: #e5e7eb;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+.game {
+    background: #020617;
+    padding: 24px;
+    border-radius: 12px;
+    width: 340px;
+    text-align: center;
+    box-shadow: 0 0 30px rgba(0,0,0,.6);
+}
+.clock {
+    font-size: 2em;
+    margin: 12px 0;
+    font-variant-numeric: tabular-nums;
+}
+input, button {
+    width: 100%;
+    padding: 8px;
+    margin: 4px 0;
+}
+label {
+    font-size: 0.9em;
+}
+.result {
+    margin-top: 12px;
+}
 </style>
 </head>
 <body>
 
 <div class="game">
     <h2>あけおめ00:00練習</h2>
+
+    <label>
+        回線速度（Mbps）
+        <input id="speed" type="number" value="31">
+    </label>
+
+    <label>
+        <input type="checkbox" id="lagToggle" checked>
+        カスタムラグを有効
+    </label>
+
     <button id="startBtn">スタート</button>
 
-    <div class="clock" id="clock">23:59:45.000</div>
+    <div class="clock" id="clock">23:59:10.000</div>
 
     <input id="message" placeholder="あけおめ" disabled>
     <button id="sendBtn" disabled>送る</button>
@@ -59,9 +65,10 @@
 </div>
 
 <script>
-let startTime = null;
-let timer = null;
-let sent = false;
+let startTime, timer, sent = false;
+
+const START_OFFSET = -50000; // 23:59:10
+const ZERO_TIME = 0;
 
 const clockEl = document.getElementById("clock");
 const startBtn = document.getElementById("startBtn");
@@ -69,19 +76,21 @@ const sendBtn = document.getElementById("sendBtn");
 const messageInput = document.getElementById("message");
 const resultEl = document.getElementById("result");
 
-const START_OFFSET = -15000; // 23:59:45 = -15000ms
-const ZERO_TIME = 0;
-
 function formatTime(ms) {
-    const base = new Date(0);
-    base.setMilliseconds(ms + 24*60*60*1000);
-    return base.toISOString().substr(11, 12);
+    const d = new Date(0);
+    d.setMilliseconds(ms + 86400000);
+    return d.toISOString().substr(11, 12);
+}
+
+function calcLag() {
+    if (!document.getElementById("lagToggle").checked) return 0;
+    const speed = Math.max(1, Number(document.getElementById("speed").value));
+    return 200 + (1000 / speed) * 10;
 }
 
 function startGame() {
     sent = false;
     resultEl.textContent = "";
-    messageInput.value = "";
     messageInput.disabled = false;
     sendBtn.disabled = false;
 
@@ -89,8 +98,7 @@ function startGame() {
     clearInterval(timer);
 
     timer = setInterval(() => {
-        const now = performance.now();
-        const elapsed = now - startTime + START_OFFSET;
+        const elapsed = performance.now() - startTime + START_OFFSET;
         clockEl.textContent = formatTime(elapsed);
     }, 10);
 }
@@ -99,23 +107,29 @@ function sendMessage() {
     if (sent) return;
     sent = true;
 
-    const now = performance.now();
-    const elapsed = now - startTime + START_OFFSET;
-    clearInterval(timer);
-
-    if (elapsed < ZERO_TIME) {
-        resultEl.textContent = "❌ おてつき！";
-    } else {
-        resultEl.textContent = `🎉 +${Math.floor(elapsed)} ms`;
-    }
+    const pressTime = performance.now() - startTime + START_OFFSET;
+    const lag = calcLag();
 
     messageInput.disabled = true;
     sendBtn.disabled = true;
+
+    setTimeout(() => {
+        clearInterval(timer);
+        const finalTime = pressTime + lag;
+
+        if (finalTime < ZERO_TIME) {
+            resultEl.innerHTML =
+                `❌ おてつき<br>送信遅延: ${Math.floor(lag)}ms`;
+        } else {
+            resultEl.innerHTML =
+                `🎉 +${Math.floor(finalTime)} ms<br>` +
+                `送信遅延: ${Math.floor(lag)}ms`;
+        }
+    }, lag);
 }
 
 startBtn.onclick = startGame;
 sendBtn.onclick = sendMessage;
-
 messageInput.addEventListener("keydown", e => {
     if (e.key === "Enter") sendMessage();
 });
